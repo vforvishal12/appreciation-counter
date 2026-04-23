@@ -47,6 +47,8 @@ export function SubmissionForm({ userName }: { userName: string }) {
         body: JSON.stringify({ from: userName, to, givenBy, message }),
       })
 
+      const data = await res.json()
+
       if (res.ok) {
         setSuccessMsg('Appreciation submitted! Waiting for admin approval.')
         setTo('')
@@ -54,9 +56,10 @@ export function SubmissionForm({ userName }: { userName: string }) {
         setMessage('')
         mutate()
       } else {
-        setErrorMsg('Failed to submit appreciation')
+        setErrorMsg(data.error || 'Failed to submit appreciation')
       }
     } catch (error) {
+      console.error('Submission error:', error)
       setErrorMsg('An error occurred')
     } finally {
       setLoading(false)

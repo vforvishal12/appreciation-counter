@@ -16,10 +16,14 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 export function Leaderboard() {
   const [timeRange, setTimeRange] = useState('all')
 
-  const { data: entries = [] } = useSWR(
+  const { data: rawData, error: swrError } = useSWR(
     `/api/leaderboard?timeRange=${timeRange}`,
     fetcher
   )
+
+  // Handle API errors and ensure data is always an array
+  const entries = Array.isArray(rawData) ? rawData : []
+  const hasError = swrError || (rawData?.error)
 
   const timeRanges = [
     { value: 'all', label: 'All Time' },
@@ -49,6 +53,14 @@ export function Leaderboard() {
           ))}
         </div>
       </div>
+
+      {hasError && (
+        <Card className="p-4 bg-destructive/10 border-2 border-destructive mb-6">
+          <p className="text-destructive font-medium">
+            {typeof rawData?.error === 'string' ? rawData.error : 'Failed to load leaderboard'}
+          </p>
+        </Card>
+      )}
 
       {entries.length === 0 ? (
         <Card className="p-10 bg-card border-2 border-border text-center">

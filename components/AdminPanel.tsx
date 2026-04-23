@@ -18,8 +18,12 @@ interface Submission {
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function AdminPanel() {
-  const { data: submissions = [], mutate } = useSWR('/api/submissions?status=pending', fetcher)
+  const { data: rawData, mutate, error: swrError } = useSWR('/api/submissions?status=pending', fetcher)
   const [loading, setLoading] = useState<string | null>(null)
+
+  // Handle API errors and ensure data is always an array
+  const submissions = Array.isArray(rawData) ? rawData : []
+  const hasError = swrError || (rawData?.error)
 
   const handleApprove = async (id: string) => {
     setLoading(id)
@@ -60,6 +64,14 @@ export function AdminPanel() {
   return (
     <div>
       <h2 className="text-2xl font-bold text-foreground mb-6">Pending Appreciations</h2>
+
+      {hasError && (
+        <Card className="p-4 bg-destructive/10 border-2 border-destructive mb-6">
+          <p className="text-destructive font-medium">
+            {typeof rawData?.error === 'string' ? rawData.error : 'Failed to load pending appreciations'}
+          </p>
+        </Card>
+      )}
 
       {submissions.length === 0 ? (
         <Card className="p-8 bg-card border-2 border-border text-center">

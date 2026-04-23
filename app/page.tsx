@@ -1,19 +1,57 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from '@/app/context/AuthContext'
 import { AuthModal } from '@/components/AuthModal'
 import { SubmissionForm } from '@/components/SubmissionForm'
 import { AdminPanel } from '@/components/AdminPanel'
 import { Leaderboard } from '@/components/Leaderboard'
+import { DatabaseSetup } from '@/components/DatabaseSetup'
 import { Button } from '@/components/ui/button'
 
 function PageContent() {
   const { isAuthenticated, isAdmin, userName, logout } = useAuth()
   const [activeTab, setActiveTab] = useState<'submit' | 'leaderboard' | 'admin'>('submit')
+  const [dbError, setDbError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Check if database is initialized
+    const checkDB = async () => {
+      try {
+        const res = await fetch('/api/submissions')
+        if (res.status === 503) {
+          const data = await res.json()
+          setDbError(data.error)
+        }
+      } catch (error) {
+        console.error('DB check error:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (isAuthenticated) {
+      checkDB()
+    } else {
+      setLoading(false)
+    }
+  }, [isAuthenticated])
 
   if (!isAuthenticated) {
     return <AuthModal />
+  }
+
+  if (dbError) {
+    return <DatabaseSetup />
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
   }
 
   return (

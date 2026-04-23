@@ -24,6 +24,13 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('Supabase error:', error)
+      // Check if it's a table not found error
+      if (error.message?.includes('relation') || error.code === 'PGRST116') {
+        return Response.json(
+          { error: 'Database not initialized. Please run the SQL setup from SQL_SETUP.md' },
+          { status: 503 }
+        )
+      }
       return Response.json({ error: 'Failed to fetch submissions' }, { status: 500 })
     }
 
@@ -62,6 +69,13 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Supabase error:', error)
+      // Check if it's a table not found error
+      if (error.message?.includes('relation') || error.code === 'PGRST116') {
+        return Response.json(
+          { error: 'Database not initialized. Please run the SQL setup from SQL_SETUP.md' },
+          { status: 503 }
+        )
+      }
       return Response.json({ error: 'Failed to create submission' }, { status: 500 })
     }
 

@@ -1,56 +1,37 @@
-import fs from 'fs/promises'
-import path from 'path'
+import { createClient } from '@supabase/supabase-js'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
-const SUBMISSIONS_FILE = path.join(DATA_DIR, 'submissions.json')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-interface Submission {
-  id: string
-  from: string
-  to: string
-  givenBy: string
-  message: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  approvedAt?: string
-  deletedAt?: string
-  statusHistory: Array<{
-    status: 'pending' | 'approved' | 'rejected' | 'deleted'
-    timestamp: string
-  }>
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables')
 }
 
-async function ensureDataDir() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true })
-  } catch (error) {
-    // Directory might already exist
-  }
-}
-
-async function readSubmissions(): Promise<Submission[]> {
-  await ensureDataDir()
-  try {
-    const data = await fs.readFile(SUBMISSIONS_FILE, 'utf-8')
-    return JSON.parse(data)
-  } catch (error) {
-    return []
-  }
-}
-
-async function writeSubmissions(submissions: Submission[]) {
-  await ensureDataDir()
-  await fs.writeFile(SUBMISSIONS_FILE, JSON.stringify(submissions, null, 2))
-}
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
 
-  const submissions = await readSubmissions()
-  const filtered = status ? submissions.filter((s) => s.status === status) : submissions
+  try {
+    let query = supabase.from('submissions').select('*').eq('deleted', false)
 
-  return Response.json(filtered)
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Supabase error:', error)
+      return Response.json({ error: 'Failed to fetch submissions' }, { status: 500 })
+    }
+
+    return Response.json(data || [])
+  } catch (error) {
+    console.error('Error fetching submissions:', error)
+    return Response.json({ error: 'Failed to fetch submissions' }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
@@ -64,25 +45,29 @@ export async function POST(request: Request) {
     )
   }
 
-  const submissions = await readSubmissions()
-  const newSubmission: Submission = {
-    id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    from,
-    to,
-    givenBy,
-    message,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    statusHistory: [
-      {
-        status: 'pending',
-        timestamp: new Date().toISOString(),
-      },
-    ],
+  try {
+    const { data, error } = await supabase
+      .from('submissions')
+      .insert([
+        {
+          id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          from_user: from,
+          to_user: to,
+          given_by: givenBy,
+          message,
+          status: 'pending',
+        },
+      ])
+      .select()
+
+    if (error) {
+      console.error('Supabase error:', error)
+      return Response.json({ error: 'Failed to create submission' }, { status: 500 })
+    }
+
+    return Response.json(data?.[0], { status: 201 })
+  } catch (error) {
+    console.error('Error creating submission:', error)
+    return Response.json({ error: 'Failed to create submission' }, { status: 500 })
   }
-
-  submissions.push(newSubmission)
-  await writeSubmissions(submissions)
-
-  return Response.json(newSubmission, { status: 201 })
 }

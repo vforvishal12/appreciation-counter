@@ -1,60 +1,34 @@
-import fs from 'fs/promises'
-import path from 'path'
+import { createClient } from '@supabase/supabase-js'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
-const SUBMISSIONS_FILE = path.join(DATA_DIR, 'submissions.json')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-interface Submission {
-  id: string
-  from: string
-  to: string
-  givenBy: string
-  message: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  approvedAt?: string
-  deletedAt?: string
-  statusHistory: Array<{
-    status: 'pending' | 'approved' | 'rejected' | 'deleted'
-    timestamp: string
-  }>
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables')
 }
 
-async function readSubmissions(): Promise<Submission[]> {
-  try {
-    const data = await fs.readFile(SUBMISSIONS_FILE, 'utf-8')
-    return JSON.parse(data)
-  } catch (error) {
-    return []
-  }
-}
-
-async function writeSubmissions(submissions: Submission[]) {
-  await fs.writeFile(SUBMISSIONS_FILE, JSON.stringify(submissions, null, 2))
-}
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const submissions = await readSubmissions()
-  const submission = submissions.find((s) => s.id === params.id)
+  const { id } = await params
 
-  if (!submission) {
-    return Response.json(
-      { error: 'Submission not found' },
-      { status: 404 }
-    )
+  try {
+    const { data, error } = await supabase
+      .from('submissions')
+      .update({ deleted: true, deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+
+    if (error || !data || data.length === 0) {
+      return Response.json({ error: 'Submission not found' }, { status: 404 })
+    }
+
+    return Response.json(data[0])
+  } catch (error) {
+    console.error('Error deleting submission:', error)
+    return Response.json({ error: 'Failed to delete submission' }, { status: 500 })
   }
-
-  submission.status = 'rejected'
-  submission.deletedAt = new Date().toISOString()
-  submission.statusHistory.push({
-    status: 'deleted',
-    timestamp: new Date().toISOString(),
-  })
-
-  await writeSubmissions(submissions)
-
-  return Response.json(submission)
 }

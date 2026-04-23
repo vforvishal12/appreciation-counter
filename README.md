@@ -1,2 +1,0 @@
-# appreciation-counter
-appreciation-counter
